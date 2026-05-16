@@ -1,0 +1,801 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SwiftDrop Flash Sale Platform</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">S</div>
+        <div>
+          <strong>SwiftDrop</strong>
+          <span>Flash sale control room</span>
+        </div>
+      </div>
+
+      <div class="role-switch" aria-label="Role switcher">
+        <button type="button" data-role="customer" class="active">Customer</button>
+        <button type="button" data-role="admin">Admin</button>
+      </div>
+
+      <button class="btn secondary mobile-menu" type="button" id="menuToggle">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+        Menu
+      </button>
+
+      <nav class="nav" id="nav"></nav>
+
+      <div class="sidebar-note">
+        This frontend models the PDF requirements: role-gated surfaces, countdowns, live stock, reservation confirmation, duplicate-purchase prevention, admin lifecycle actions, customer history, and clear user-facing outcomes.
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="sectionEyebrow">Marketplace</p>
+          <h1 id="pageTitle">Win the drop before it sells out.</h1>
+          <p class="lead" id="pageLead">Browse scheduled flash sale events, watch live stock shift in real time, and reserve scarce imported items through a confirmation-first purchase flow.</p>
+        </div>
+        <div class="auth-strip" id="sessionCard"></div>
+      </header>
+
+      <section id="app"></section>
+    </main>
+  </div>
+
+  <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
+  <div class="toast-stack" id="toasts" aria-live="polite" aria-atomic="true"></div>
+
+  <script>
+    const icons = {
+      grid: '<svg class="icon" viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"></path></svg>',
+      cart: '<svg class="icon" viewBox="0 0 24 24"><path d="M6 6h15l-2 8H8L6 3H3"></path><path d="M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM18 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"></path></svg>',
+      user: '<svg class="icon" viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"></path><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path></svg>',
+      chart: '<svg class="icon" viewBox="0 0 24 24"><path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 5-7"></path></svg>',
+      users: '<svg class="icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+      lock: '<svg class="icon" viewBox="0 0 24 24"><path d="M6 10V8a6 6 0 0 1 12 0v2"></path><rect x="4" y="10" width="16" height="11" rx="2"></rect></svg>',
+      zap: '<svg class="icon" viewBox="0 0 24 24"><path d="M13 2L3 14h8l-1 8 11-14h-8l0-6z"></path></svg>',
+      plus: '<svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>',
+      logout: '<svg class="icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5M21 12H9"></path></svg>',
+      check: '<svg class="icon" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg>'
+    };
+
+    const seedEvents = [
+      {
+        id: 'evt-aurora',
+        name: 'Aurora Tech Import Drop',
+        cover: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80',
+        goLive: Date.now() + 1000 * 60 * 11,
+        forced: null,
+        items: [
+          { id: 'itm-buds', name: 'NoiseLock Pro Earbuds', price: 69, initialStock: 240, stock: 240, reserved: 0 },
+          { id: 'itm-hub', name: 'Nine-Port Travel Hub', price: 42, initialStock: 180, stock: 180, reserved: 0 },
+          { id: 'itm-band', name: 'PulseFit Smart Band', price: 58, initialStock: 320, stock: 320, reserved: 0 }
+        ]
+      },
+      {
+        id: 'evt-home',
+        name: 'Home Studio Essentials',
+        cover: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=1200&q=80',
+        goLive: Date.now() - 1000 * 60 * 7,
+        forced: null,
+        items: [
+          { id: 'itm-lamp', name: 'Halo Desk Lamp', price: 35, initialStock: 150, stock: 87, reserved: 0 },
+          { id: 'itm-air', name: 'Mini Air Purifier', price: 91, initialStock: 120, stock: 46, reserved: 0 },
+          { id: 'itm-scale', name: 'Smart Kitchen Scale', price: 28, initialStock: 300, stock: 173, reserved: 0 }
+        ]
+      },
+      {
+        id: 'evt-luxe',
+        name: 'Luxe Carry Limited Batch',
+        cover: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=1200&q=80',
+        goLive: Date.now() - 1000 * 60 * 90,
+        forced: 'closed',
+        items: [
+          { id: 'itm-pack', name: 'Carbon Weekender Pack', price: 118, initialStock: 100, stock: 0, reserved: 0 },
+          { id: 'itm-wallet', name: 'Slim RFID Wallet', price: 39, initialStock: 140, stock: 0, reserved: 0 }
+        ]
+      }
+    ];
+
+    const users = [
+      { id: 'usr-customer', role: 'customer', name: 'Maya Fernando', email: 'maya@swiftdrop.test', active: true },
+      { id: 'usr-ravi', role: 'customer', name: 'Ravi Perera', email: 'ravi@swiftdrop.test', active: true },
+      { id: 'usr-iman', role: 'customer', name: 'Iman Silva', email: 'iman@swiftdrop.test', active: false },
+      { id: 'usr-admin', role: 'admin', name: 'Admin Operator', email: 'admin@swiftdrop.test', active: true }
+    ];
+
+    const state = {
+      role: 'customer',
+      view: 'marketplace',
+      user: users[0],
+      events: structuredClone(seedEvents),
+      orders: [
+        { id: 'ord-1001', userId: 'usr-customer', eventId: 'evt-home', itemId: 'itm-scale', itemName: 'Smart Kitchen Scale', eventName: 'Home Studio Essentials', qty: 1, price: 28, status: 'Confirmed', date: new Date(Date.now() - 1000 * 60 * 52).toISOString() }
+      ],
+      pendingReservation: null,
+      busyItem: null
+    };
+
+    const customerNav = [
+      { id: 'marketplace', label: 'Marketplace', icon: icons.grid },
+      { id: 'orders', label: 'Order history', icon: icons.cart },
+      { id: 'profile', label: 'Profile', icon: icons.user }
+    ];
+
+    const adminNav = [
+      { id: 'adminDashboard', label: 'Dashboard', icon: icons.chart },
+      { id: 'adminEvents', label: 'Event management', icon: icons.zap },
+      { id: 'adminUsers', label: 'Customers', icon: icons.users }
+    ];
+
+    const app = document.querySelector('#app');
+    const nav = document.querySelector('#nav');
+    const modal = document.querySelector('#modal');
+
+    function currency(value) {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+    }
+
+    function formatDate(value) {
+      return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+    }
+
+    function getEventStatus(event) {
+      if (event.forced === 'closed') return 'closed';
+      if (event.items.every(item => item.stock <= 0)) return 'closed';
+      if (event.forced === 'live') return 'live';
+      return Date.now() >= event.goLive ? 'live' : 'locked';
+    }
+
+    function statusLabel(status) {
+      return status === 'live' ? 'Live' : status === 'locked' ? 'Locked' : 'Sold out';
+    }
+
+    function itemSold(event, item) {
+      return item.initialStock - item.stock - item.reserved;
+    }
+
+    function eventRevenue(event) {
+      return event.items.reduce((sum, item) => sum + (itemSold(event, item) * item.price), 0);
+    }
+
+    function eventUnitsSold(event) {
+      return event.items.reduce((sum, item) => sum + itemSold(event, item), 0);
+    }
+
+    function countdownParts(target) {
+      const ms = Math.max(0, target - Date.now());
+      const days = Math.floor(ms / 86400000);
+      const hours = Math.floor(ms / 3600000) % 24;
+      const minutes = Math.floor(ms / 60000) % 60;
+      const seconds = Math.floor(ms / 1000) % 60;
+      return { days, hours, minutes, seconds };
+    }
+
+    function renderCountdown(target) {
+      const parts = countdownParts(target);
+      return `
+        <div class="countdown" aria-label="Countdown to go live">
+          ${Object.entries(parts).map(([key, value]) => `
+            <div class="timebox">
+              <strong>${String(value).padStart(2, '0')}</strong>
+              <span>${key}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function showToast(title, message) {
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.innerHTML = `<strong>${title}</strong><span>${message}</span>`;
+      document.querySelector('#toasts').appendChild(toast);
+      setTimeout(() => toast.remove(), 4200);
+    }
+
+    function setHeader(eyebrow, title, lead) {
+      document.querySelector('#sectionEyebrow').textContent = eyebrow;
+      document.querySelector('#pageTitle').textContent = title;
+      document.querySelector('#pageLead').textContent = lead;
+    }
+
+    function renderSession() {
+      if (!state.user) {
+        document.querySelector('#sessionCard').innerHTML = `
+          <div class="avatar">?</div>
+          <div style="min-width:0; flex:1">
+            <strong>Guest session</strong>
+            <span>Sign in to purchase, manage profile, or view orders</span>
+          </div>
+          <button class="btn" type="button" onclick="go('auth')">${icons.lock}Sign in</button>
+        `;
+        return;
+      }
+      document.querySelector('#sessionCard').innerHTML = `
+        <div class="avatar">${state.user.name.split(' ').map(part => part[0]).slice(0, 2).join('')}</div>
+        <div style="min-width:0; flex:1">
+          <strong>${state.user.name}</strong>
+          <span>${state.user.email} Â· ${state.user.role}</span>
+        </div>
+        <button class="btn secondary" type="button" onclick="logout()">${icons.logout}Logout</button>
+      `;
+    }
+
+    function renderNav() {
+      if (!state.user) {
+        nav.innerHTML = `
+          <button type="button" class="${state.view === 'auth' ? 'active' : ''}" onclick="go('auth')">
+            ${icons.lock}
+            Authentication
+          </button>
+        `;
+        return;
+      }
+      const items = state.role === 'admin' ? adminNav : customerNav;
+      nav.innerHTML = items.map(item => `
+        <button type="button" class="${state.view === item.id ? 'active' : ''}" onclick="go('${item.id}')">
+          ${item.icon}
+          ${item.label}
+        </button>
+      `).join('');
+    }
+
+    function renderHero() {
+      const liveEvent = state.events.find(event => getEventStatus(event) === 'live') || state.events[0];
+      return `
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">High demand marketplace</p>
+            <h1>Win the drop before it sells out.</h1>
+            <p class="lead">SwiftDrop releases scarce imported products through scheduled events. This interface mirrors the required customer flow: locked previews, countdowns, live stock, one-click reservation, confirmation, and plain-language purchase outcomes.</p>
+            <div class="actions">
+              <button class="btn" type="button" onclick="document.querySelector('#eventsGrid').scrollIntoView()">${icons.zap}Browse events</button>
+              <button class="btn secondary" type="button" onclick="go('orders')">${icons.cart}View orders</button>
+            </div>
+          </div>
+          <div class="hero-visual" role="img" aria-label="Online flash sale warehouse and product dispatch">
+            <div class="live-board">
+              ${liveEvent.items.slice(0, 3).map(item => `
+                <div class="live-row">
+                  <div>
+                    <strong>${item.name}</strong>
+                    <div class="progress" style="--value:${Math.max(4, item.stock / item.initialStock * 100)}%"><span></span></div>
+                  </div>
+                  <span>${item.stock} left</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderAuth() {
+      setHeader('Authentication', 'Secure entry for customers and admins.', 'Customers can register publicly. Admin access is available only through seeded accounts and cannot be self-promoted from registration.');
+      app.innerHTML = `
+        <div class="grid two">
+          <div class="panel">
+            <h2>Customer registration</h2>
+            <form class="form" onsubmit="registerCustomer(event)">
+              <div class="field"><label for="registerName">Display name</label><input id="registerName" required placeholder="Your name"></div>
+              <div class="field"><label for="registerEmail">Email address</label><input id="registerEmail" type="email" required placeholder="you@example.com"></div>
+              <div class="field"><label for="registerPassword">Password</label><input id="registerPassword" type="password" minlength="8" required placeholder="Minimum 8 characters"></div>
+              <button class="btn" type="submit">${icons.user}Create customer account</button>
+            </form>
+          </div>
+          <div class="panel">
+            <h2>Sign in</h2>
+            <form class="form" onsubmit="login(event)">
+              <div class="field"><label for="loginEmail">Email address</label><input id="loginEmail" type="email" required value="${state.role === 'admin' ? 'admin@swiftdrop.test' : 'maya@swiftdrop.test'}"></div>
+              <div class="field"><label for="loginPassword">Password</label><input id="loginPassword" type="password" required value="password123"></div>
+              <button class="btn secondary" type="submit">${icons.lock}Sign in</button>
+            </form>
+            <p class="muted" style="margin:14px 0 0">Demo seeded accounts: maya@swiftdrop.test and admin@swiftdrop.test. Deactivated accounts are rejected.</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderEventCard(event) {
+      const status = getEventStatus(event);
+      return `
+        <article class="event-card">
+          <div class="event-cover" style="background-image:url('${event.cover}')">
+            <span class="status ${status}">${statusLabel(status)}</span>
+          </div>
+          <div class="event-body">
+            <div>
+              <h3>${event.name}</h3>
+              <p class="event-meta">Go-live: ${formatDate(event.goLive)}</p>
+            </div>
+            ${status === 'locked' ? renderCountdown(event.goLive) : ''}
+            <div class="grid">
+              ${event.items.map(item => renderItemRow(event, item, status)).join('')}
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderItemRow(event, item, status) {
+      const purchased = state.orders.some(order => order.userId === state.user.id && order.eventId === event.id && order.itemId === item.id);
+      const soldOut = item.stock <= 0;
+      const disabled = status !== 'live' || soldOut || purchased || state.busyItem === item.id;
+      let label = 'Buy now';
+      if (status === 'locked') label = 'Locked';
+      if (soldOut) label = 'Sold out';
+      if (purchased) label = 'Purchased';
+      if (state.busyItem === item.id) label = 'Reserving';
+      return `
+        <div class="item-row">
+          <div>
+            <strong>${item.name}</strong>
+            <div class="stock">${status === 'live' ? `${item.stock} available in real time` : `${currency(item.price)} Â· ${item.initialStock} units listed`}</div>
+          </div>
+          <div class="actions" style="justify-content:flex-end">
+            <span class="price">${currency(item.price)}</span>
+            <button class="btn ${soldOut ? 'secondary' : ''}" type="button" ${disabled ? 'disabled' : ''} onclick="reserveItem('${event.id}', '${item.id}')">${icons.cart}${label}</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMarketplace() {
+      setHeader('Marketplace', 'Win the drop before it sells out.', 'Browse events, track live stock, and complete purchases through a reservation-first confirmation flow.');
+      app.innerHTML = `
+        ${renderHero()}
+        <div class="grid three" id="eventsGrid">
+          ${state.events.map(renderEventCard).join('')}
+        </div>
+      `;
+    }
+
+    function renderOrders() {
+      setHeader('Order history', 'Every confirmed purchase in one place.', 'Customers can view event name, item, quantity, price paid, date, and status.');
+      const orders = state.orders.filter(order => order.userId === state.user.id);
+      app.innerHTML = orders.length ? `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Order</th><th>Event</th><th>Item</th><th>Qty</th><th>Paid</th><th>Date</th><th>Status</th></tr></thead>
+            <tbody>
+              ${orders.map(order => `
+                <tr>
+                  <td>${order.id}</td>
+                  <td>${order.eventName}</td>
+                  <td>${order.itemName}</td>
+                  <td>${order.qty}</td>
+                  <td>${currency(order.price)}</td>
+                  <td>${formatDate(order.date)}</td>
+                  <td><span class="status">${order.status}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : `<div class="empty"><div><h2>No purchases yet</h2><p>Live event purchases will appear here immediately after confirmation.</p></div></div>`;
+    }
+
+    function renderProfile() {
+      setHeader('Profile', 'Manage your account.', 'Customer profile actions require an authenticated session and update only the current user.');
+      app.innerHTML = `
+        <div class="grid two">
+          <div class="panel">
+            <h2>Profile details</h2>
+            <form class="form" onsubmit="updateProfile(event)">
+              <div class="field"><label for="displayName">Display name</label><input id="displayName" value="${state.user.name}" required></div>
+              <div class="field"><label>Email</label><input value="${state.user.email}" disabled></div>
+              <button class="btn" type="submit">${icons.check}Save profile</button>
+            </form>
+          </div>
+          <div class="panel">
+            <h2>Change password</h2>
+            <form class="form" onsubmit="changePassword(event)">
+              <div class="field"><label for="currentPassword">Current password</label><input id="currentPassword" type="password" required></div>
+              <div class="field"><label for="newPassword">New password</label><input id="newPassword" type="password" minlength="8" required></div>
+              <button class="btn secondary" type="submit">${icons.lock}Update password</button>
+            </form>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAdminDashboard() {
+      setHeader('Admin dashboard', 'Operational visibility for every drop.', 'Admins monitor event state, units sold, revenue, and customer account status.');
+      const totalRevenue = state.events.reduce((sum, event) => sum + eventRevenue(event), 0);
+      const liveCount = state.events.filter(event => getEventStatus(event) === 'live').length;
+      const sold = state.events.reduce((sum, event) => sum + eventUnitsSold(event), 0);
+      app.innerHTML = `
+        <div class="grid four" style="margin-bottom:18px">
+          <div class="metric"><span>Live events</span><strong>${liveCount}</strong></div>
+          <div class="metric"><span>Units sold</span><strong>${sold}</strong></div>
+          <div class="metric"><span>Revenue</span><strong>${currency(totalRevenue)}</strong></div>
+          <div class="metric"><span>Active customers</span><strong>${users.filter(user => user.role === 'customer' && user.active).length}</strong></div>
+        </div>
+        ${renderAdminEventTable()}
+      `;
+    }
+
+    function renderAdminEventTable() {
+      return `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Event</th><th>Status</th><th>Go live</th><th>Units sold</th><th>Revenue</th><th>Controls</th></tr></thead>
+            <tbody>
+              ${state.events.map(event => {
+                const status = getEventStatus(event);
+                return `
+                  <tr>
+                    <td><strong>${event.name}</strong><br><span class="muted">${event.items.length} items</span></td>
+                    <td><span class="status ${status}">${statusLabel(status)}</span></td>
+                    <td>${formatDate(event.goLive)}</td>
+                    <td>${eventUnitsSold(event)}</td>
+                    <td>${currency(eventRevenue(event))}</td>
+                    <td class="actions">
+                      <button class="btn secondary" type="button" onclick="openEventEditor('${event.id}')" ${status !== 'locked' ? 'disabled' : ''}>Edit</button>
+                      <button class="btn" type="button" onclick="forceOpen('${event.id}')" ${status !== 'locked' ? 'disabled' : ''}>Open</button>
+                      <button class="btn warning" type="button" onclick="forceClose('${event.id}')" ${status !== 'live' ? 'disabled' : ''}>Close</button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderAdminEvents() {
+      setHeader('Event management', 'Create and control sale events.', 'Locked events can be edited. Live events can be force-closed. Stock quantities are constrained to the documented 100 to 500 range.');
+      app.innerHTML = `
+        <div class="grid two">
+          <div class="panel">
+            <h2>Create event</h2>
+            <form class="form" onsubmit="createEvent(event)">
+              <div class="field"><label for="eventName">Event name</label><input id="eventName" required placeholder="Weekend Import Drop"></div>
+              <div class="field"><label for="eventCover">Cover photo URL</label><input id="eventCover" required value="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1200&q=80"></div>
+              <div class="field"><label for="eventTime">Go-live date and time</label><input id="eventTime" type="datetime-local" required></div>
+              <div class="grid two">
+                <div class="field"><label for="itemName">Item name</label><input id="itemName" required placeholder="Imported Smart Watch"></div>
+                <div class="field"><label for="itemPrice">Unit price</label><input id="itemPrice" type="number" min="1" step="1" required placeholder="79"></div>
+              </div>
+              <div class="field"><label for="itemStock">Stock quantity</label><input id="itemStock" type="number" min="100" max="500" required placeholder="200"></div>
+              <button class="btn" type="submit">${icons.plus}Create locked event</button>
+            </form>
+          </div>
+          <div>
+            ${renderAdminEventTable()}
+          </div>
+        </div>
+      `;
+      const input = document.querySelector('#eventTime');
+      input.value = new Date(Date.now() + 1000 * 60 * 30).toISOString().slice(0, 16);
+    }
+
+    function renderAdminUsers() {
+      setHeader('Customer accounts', 'Role-gated user management.', 'Admins can view customer status and deactivate accounts. Public admin registration is intentionally absent from this frontend.');
+      app.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Customer</th><th>Email</th><th>Status</th><th>Orders</th><th>Action</th></tr></thead>
+            <tbody>
+              ${users.filter(user => user.role === 'customer').map(user => `
+                <tr>
+                  <td><strong>${user.name}</strong></td>
+                  <td>${user.email}</td>
+                  <td><span class="status ${user.active ? '' : 'closed'}">${user.active ? 'Active' : 'Deactivated'}</span></td>
+                  <td>${state.orders.filter(order => order.userId === user.id).length}</td>
+                  <td><button class="btn secondary" type="button" onclick="toggleCustomer('${user.id}')">${user.active ? 'Deactivate' : 'Reactivate'}</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function render() {
+      renderSession();
+      renderNav();
+      document.querySelectorAll('[data-role]').forEach(button => {
+        button.classList.toggle('active', button.dataset.role === state.role);
+      });
+      if (!state.user || state.view === 'auth') {
+        renderAuth();
+        return;
+      }
+      if (state.view === 'marketplace') renderMarketplace();
+      if (state.view === 'orders') renderOrders();
+      if (state.view === 'profile') renderProfile();
+      if (state.view === 'adminDashboard') renderAdminDashboard();
+      if (state.view === 'adminEvents') renderAdminEvents();
+      if (state.view === 'adminUsers') renderAdminUsers();
+    }
+
+    function go(view) {
+      state.view = view;
+      render();
+    }
+
+    function logout() {
+      state.user = null;
+      state.role = 'customer';
+      state.view = 'auth';
+      showToast('Session ended', 'The current session token would be invalidated by the backend.');
+      render();
+    }
+
+    function registerCustomer(event) {
+      event.preventDefault();
+      const email = document.querySelector('#registerEmail').value.trim().toLowerCase();
+      if (users.some(user => user.email.toLowerCase() === email)) {
+        return showToast('Email already registered', 'Use a different email address or sign in to the existing account.');
+      }
+      const user = {
+        id: `usr-${Date.now()}`,
+        role: 'customer',
+        name: document.querySelector('#registerName').value.trim(),
+        email,
+        active: true
+      };
+      users.push(user);
+      state.user = user;
+      state.role = 'customer';
+      state.view = 'marketplace';
+      showToast('Account created', 'Customer registration succeeded and a session token would be issued.');
+      render();
+    }
+
+    function login(event) {
+      event.preventDefault();
+      const email = document.querySelector('#loginEmail').value.trim().toLowerCase();
+      const user = users.find(candidate => candidate.email.toLowerCase() === email);
+      if (!user) return showToast('Login failed', 'No account exists for that email address.');
+      if (!user.active) return showToast('Account deactivated', 'This customer account cannot log in. Contact SwiftDrop support.');
+      state.user = user;
+      state.role = user.role;
+      state.view = user.role === 'admin' ? 'adminDashboard' : 'marketplace';
+      showToast('Login successful', 'A secure session token would be issued by the backend.');
+      render();
+    }
+
+    function reserveItem(eventId, itemId) {
+      if (!state.user) {
+        state.view = 'auth';
+        render();
+        return showToast('Login required', 'Please sign in before attempting a purchase.');
+      }
+      const event = state.events.find(candidate => candidate.id === eventId);
+      const item = event.items.find(candidate => candidate.id === itemId);
+      if (getEventStatus(event) !== 'live') return showToast('Event is locked', 'Purchasing opens only after the event goes live.');
+      if (item.stock <= 0) return showToast('Sold out', 'This item has no units left to reserve.');
+      if (state.orders.some(order => order.userId === state.user.id && order.eventId === eventId && order.itemId === itemId)) {
+        return showToast('Already purchased', 'Each customer can purchase an event item only once.');
+      }
+      state.busyItem = itemId;
+      render();
+      setTimeout(() => {
+        if (item.stock <= 0) {
+          state.busyItem = null;
+          render();
+          return showToast('Sold out', 'Another buyer claimed the final unit before your request completed.');
+        }
+        item.stock -= 1;
+        item.reserved += 1;
+        state.pendingReservation = { eventId, itemId, token: `rsv-${Date.now()}` };
+        state.busyItem = null;
+        openPaymentModal(event, item);
+        render();
+      }, 700);
+    }
+
+    function openPaymentModal(event, item) {
+      modal.classList.add('open');
+      modal.innerHTML = `
+        <div class="modal-panel">
+          <p class="eyebrow">Reserved stock</p>
+          <h2>Confirm payment</h2>
+          <p class="lead">One unit of <strong>${item.name}</strong> is reserved for this session. Confirm to create the order or cancel to release the stock immediately.</p>
+          <div class="panel" style="box-shadow:none; margin-bottom:16px">
+            <div class="item-row">
+              <div>
+                <strong>${event.name}</strong>
+                <div class="stock">${item.name} Â· Reservation ${state.pendingReservation.token}</div>
+              </div>
+              <span class="price">${currency(item.price)}</span>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn" type="button" onclick="confirmReservation()">${icons.check}Confirm order</button>
+            <button class="btn secondary" type="button" onclick="cancelReservation()">Cancel and release</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function closeModal() {
+      modal.classList.remove('open');
+      modal.innerHTML = '';
+    }
+
+    function confirmReservation() {
+      const reservation = state.pendingReservation;
+      if (!reservation) return;
+      const event = state.events.find(candidate => candidate.id === reservation.eventId);
+      const item = event.items.find(candidate => candidate.id === reservation.itemId);
+      item.reserved -= 1;
+      state.orders.unshift({
+        id: `ord-${Math.floor(Math.random() * 9000) + 1000}`,
+        userId: state.user.id,
+        eventId: event.id,
+        itemId: item.id,
+        itemName: item.name,
+        eventName: event.name,
+        qty: 1,
+        price: item.price,
+        status: 'Confirmed',
+        date: new Date().toISOString()
+      });
+      state.pendingReservation = null;
+      closeModal();
+      showToast('Purchase confirmed', `${item.name} is now in your order history.`);
+      render();
+    }
+
+    function cancelReservation() {
+      const reservation = state.pendingReservation;
+      if (!reservation) return;
+      const event = state.events.find(candidate => candidate.id === reservation.eventId);
+      const item = event.items.find(candidate => candidate.id === reservation.itemId);
+      item.reserved -= 1;
+      item.stock += 1;
+      state.pendingReservation = null;
+      closeModal();
+      showToast('Reservation released', 'The reserved unit returned to live stock.');
+      render();
+    }
+
+    function updateProfile(event) {
+      event.preventDefault();
+      state.user.name = document.querySelector('#displayName').value.trim();
+      showToast('Profile updated', 'Your display name has been saved for this session.');
+      render();
+    }
+
+    function changePassword(event) {
+      event.preventDefault();
+      event.target.reset();
+      showToast('Password updated', 'The backend would verify the current password and store a new hash.');
+    }
+
+    function createEvent(event) {
+      event.preventDefault();
+      const stock = Number(document.querySelector('#itemStock').value);
+      if (stock < 100 || stock > 500) return showToast('Invalid stock', 'Item stock must be between 100 and 500 units.');
+      const itemName = document.querySelector('#itemName').value.trim();
+      state.events.unshift({
+        id: `evt-${Date.now()}`,
+        name: document.querySelector('#eventName').value.trim(),
+        cover: document.querySelector('#eventCover').value.trim(),
+        goLive: new Date(document.querySelector('#eventTime').value).getTime(),
+        forced: null,
+        items: [{
+          id: `itm-${Date.now()}`,
+          name: itemName,
+          price: Number(document.querySelector('#itemPrice').value),
+          initialStock: stock,
+          stock,
+          reserved: 0
+        }]
+      });
+      event.target.reset();
+      showToast('Event created', 'The new event is locked until its scheduled go-live time.');
+      render();
+    }
+
+    function openEventEditor(eventId) {
+      const event = state.events.find(candidate => candidate.id === eventId);
+      if (getEventStatus(event) !== 'locked') return;
+      const item = event.items[0];
+      modal.classList.add('open');
+      modal.innerHTML = `
+        <div class="modal-panel">
+          <h2>Edit locked event</h2>
+          <form class="form" onsubmit="saveEventEdit(event, '${event.id}', '${item.id}')">
+            <div class="field"><label for="editEventName">Event name</label><input id="editEventName" value="${event.name}" required></div>
+            <div class="field"><label for="editEventTime">Go-live date and time</label><input id="editEventTime" type="datetime-local" value="${new Date(event.goLive).toISOString().slice(0,16)}" required></div>
+            <div class="field"><label for="editItemName">Primary item name</label><input id="editItemName" value="${item.name}" required></div>
+            <div class="grid two">
+              <div class="field"><label for="editItemPrice">Price</label><input id="editItemPrice" type="number" value="${item.price}" min="1" required></div>
+              <div class="field"><label for="editItemStock">Stock</label><input id="editItemStock" type="number" min="100" max="500" value="${item.initialStock}" required></div>
+            </div>
+            <div class="actions">
+              <button class="btn" type="submit">${icons.check}Save changes</button>
+              <button class="btn secondary" type="button" onclick="closeModal()">Cancel</button>
+            </div>
+          </form>
+        </div>
+      `;
+    }
+
+    function saveEventEdit(submitEvent, eventId, itemId) {
+      submitEvent.preventDefault();
+      const event = state.events.find(candidate => candidate.id === eventId);
+      const item = event.items.find(candidate => candidate.id === itemId);
+      const stock = Number(document.querySelector('#editItemStock').value);
+      if (stock < 100 || stock > 500) return showToast('Invalid stock', 'Item stock must stay between 100 and 500 units.');
+      event.name = document.querySelector('#editEventName').value.trim();
+      event.goLive = new Date(document.querySelector('#editEventTime').value).getTime();
+      item.name = document.querySelector('#editItemName').value.trim();
+      item.price = Number(document.querySelector('#editItemPrice').value);
+      item.initialStock = stock;
+      item.stock = stock;
+      closeModal();
+      showToast('Locked event updated', 'Changes are saved because the event has not gone live yet.');
+      render();
+    }
+
+    function forceOpen(eventId) {
+      const event = state.events.find(candidate => candidate.id === eventId);
+      event.forced = 'live';
+      showToast('Event opened', `${event.name} is now accepting purchases.`);
+      render();
+    }
+
+    function forceClose(eventId) {
+      const event = state.events.find(candidate => candidate.id === eventId);
+      event.forced = 'closed';
+      showToast('Event closed', `${event.name} no longer accepts purchases.`);
+      render();
+    }
+
+    function toggleCustomer(userId) {
+      const user = users.find(candidate => candidate.id === userId);
+      user.active = !user.active;
+      showToast(user.active ? 'Customer reactivated' : 'Customer deactivated', `${user.name} account status was updated.`);
+      render();
+    }
+
+    document.querySelectorAll('[data-role]').forEach(button => {
+      button.addEventListener('click', () => {
+        state.role = button.dataset.role;
+        state.user = state.role === 'admin' ? users.find(user => user.role === 'admin') : users[0];
+        state.view = state.role === 'admin' ? 'adminDashboard' : 'marketplace';
+        render();
+      });
+    });
+
+    document.querySelector('#menuToggle').addEventListener('click', () => {
+      nav.classList.toggle('open');
+    });
+
+    modal.addEventListener('click', event => {
+      if (event.target === modal && state.pendingReservation) cancelReservation();
+      if (event.target === modal) closeModal();
+    });
+
+    setInterval(() => {
+      const live = state.events.filter(event => getEventStatus(event) === 'live');
+      live.forEach(event => {
+        event.items.forEach(item => {
+          if (item.stock > 0 && Math.random() > .72) item.stock -= 1;
+        });
+      });
+      render();
+    }, 5000);
+
+    setInterval(() => {
+      if (['marketplace', 'adminDashboard', 'adminEvents'].includes(state.view)) render();
+    }, 1000);
+
+    render();
+  </script>
+</body>
+</html>
+
