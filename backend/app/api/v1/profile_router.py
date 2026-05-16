@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from app.core.database import get_db
-from app.domain.models import User, Order
+from app.domain.models import User, Order, Item
 from app.domain.schemas import OrderHistoryResponse
 from app.api.dependencies import get_current_user
 

@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/swiftdrop
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: change-this-secret-for-local-dev
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
   db:
     image: postgres:15-alpine
     environment:

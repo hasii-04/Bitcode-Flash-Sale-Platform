@@ -75,7 +75,8 @@
       events: [],
       orders: [],
       pendingReservation: null,
-      busyItem: null
+      busyItem: null,
+      sockets: new Set()
     };
 
     const customerNav = [
@@ -103,9 +104,9 @@
     }
 
     function getEventStatus(event) {
-      if (event.forced === 'closed') return 'closed';
-      if (event.items.every(item => item.stock <= 0)) return 'closed';
-      if (event.forced === 'live') return 'live';
+      if (event.state === 'closed') return 'closed';
+      if (event.items.every(item => item.current_stock <= 0)) return 'closed';
+      if (event.state === 'live') return 'live';
       return Date.now() >= event.goLive ? 'live' : 'locked';
     }
 
@@ -123,6 +124,19 @@
 
     function eventUnitsSold(event) {
       return event.items.reduce((sum, item) => sum + itemSold(event, item), 0);
+    }
+
+    function userDisplayName(user = state.user) {
+      return user?.display_name || user?.name || 'SwiftDrop user';
+    }
+
+    function normalizeEvent(event) {
+      return {
+        ...event,
+        goLive: new Date(event.go_live_time).getTime(),
+        cover: event.cover_photo || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1200&q=80',
+        items: event.items || []
+      };
     }
 
     function countdownParts(target) {
@@ -175,9 +189,9 @@
         return;
       }
       document.querySelector('#sessionCard').innerHTML = `
-        <div class="avatar">${state.user.name.split(' ').map(part => part[0]).slice(0, 2).join('')}</div>
+        <div class="avatar">${userDisplayName().split(' ').map(part => part[0]).slice(0, 2).join('')}</div>
         <div style="min-width:0; flex:1">
-          <strong>${state.user.name}</strong>
+          <strong>${userDisplayName()}</strong>
           <span>${state.user.email} Â· ${state.user.role}</span>
         </div>
         <button class="btn secondary" type="button" onclick="logout()">${icons.logout}Logout</button>
@@ -250,11 +264,11 @@
           <div class="panel">
             <h2>Sign in</h2>
             <form class="form" onsubmit="login(event)">
-              <div class="field"><label for="loginEmail">Email address</label><input id="loginEmail" type="email" required value="${state.role === 'admin' ? 'admin@swiftdrop.test' : 'maya@swiftdrop.test'}"></div>
+              <div class="field"><label for="loginEmail">Email address</label><input id="loginEmail" type="email" required value="${state.role === 'admin' ? 'admin@swiftdropdemo.com' : 'maya@swiftdropdemo.com'}"></div>
               <div class="field"><label for="loginPassword">Password</label><input id="loginPassword" type="password" required value="password123"></div>
               <button class="btn secondary" type="submit">${icons.lock}Sign in</button>
             </form>
-            <p class="muted" style="margin:14px 0 0">Demo seeded accounts: maya@swiftdrop.test and admin@swiftdrop.test. Deactivated accounts are rejected.</p>
+            <p class="muted" style="margin:14px 0 0">Demo seeded accounts: maya@swiftdropdemo.com and admin@swiftdropdemo.com. Deactivated accounts are rejected.</p>
           </div>
         </div>
       `;
@@ -345,7 +359,7 @@
           <div class="panel">
             <h2>Profile details</h2>
             <form class="form" onsubmit="updateProfile(event)">
-              <div class="field"><label for="displayName">Display name</label><input id="displayName" value="${state.user.name}" required></div>
+              <div class="field"><label for="displayName">Display name</label><input id="displayName" value="${userDisplayName()}" required></div>
               <div class="field"><label>Email</label><input value="${state.user.email}" disabled></div>
               <button class="btn" type="submit">${icons.check}Save profile</button>
             </form>
@@ -372,7 +386,7 @@
           <div class="metric"><span>Live events</span><strong>${liveCount}</strong></div>
           <div class="metric"><span>Units sold</span><strong>${sold}</strong></div>
           <div class="metric"><span>Revenue</span><strong>${currency(totalRevenue)}</strong></div>
-          <div class="metric"><span>Active customers</span><strong>${users.filter(user => user.role === 'customer' && user.active).length}</strong></div>
+          <div class="metric"><span>Active customers</span><strong>API only</strong></div>
         </div>
         ${renderAdminEventTable()}
       `;
@@ -437,22 +451,7 @@
     function renderAdminUsers() {
       setHeader('Customer accounts', 'Role-gated user management.', 'Admins can view customer status and deactivate accounts. Public admin registration is intentionally absent from this frontend.');
       app.innerHTML = `
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Customer</th><th>Email</th><th>Status</th><th>Orders</th><th>Action</th></tr></thead>
-            <tbody>
-              ${users.filter(user => user.role === 'customer').map(user => `
-                <tr>
-                  <td><strong>${user.name}</strong></td>
-                  <td>${user.email}</td>
-                  <td><span class="status ${user.active ? '' : 'closed'}">${user.active ? 'Active' : 'Deactivated'}</span></td>
-                  <td>${state.orders.filter(order => order.userId === user.id).length}</td>
-                  <td><button class="btn secondary" type="button" onclick="toggleCustomer('${user.id}')">${user.active ? 'Deactivate' : 'Reactivate'}</button></td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
+        <div class="empty"><div><h2>Customer admin API pending</h2><p>The Dockerized backend is connected for auth, events, purchases, stock updates, and order history. Customer-management endpoints are not implemented yet.</p></div></div>
       `;
     }
 
@@ -509,7 +508,7 @@
         state.user = await response.json();
         state.role = state.user.role;
         state.view = state.role === 'admin' ? 'adminDashboard' : 'marketplace';
-        if (state.role === 'customer') await fetchEvents();
+        await fetchEvents();
       }
     }
 
@@ -518,9 +517,7 @@
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
       if (response.ok) {
-        state.events = await response.json();
-        // Convert ISO dates to timestamps for the countdown logic
-        state.events.forEach(e => e.goLive = new Date(e.go_live_time).getTime());
+        state.events = (await response.json()).map(normalizeEvent);
         render();
       }
     }
@@ -552,11 +549,11 @@
         return showToast('Purchase failed', data.detail || 'Request could not be processed.');
       }
 
-      // Successful reservation
       const event = state.events.find(e => e.id == eventId);
       const item = event.items.find(i => i.id == itemId);
-      
-      // In this prototype, we'll open a mock confirmation modal
+      state.pendingReservation = { eventId: Number(eventId), itemId: Number(itemId) };
+      item.current_stock = Math.max(0, item.current_stock - 1);
+
       openPaymentModal(event, item);
       render();
     }
@@ -577,19 +574,19 @@
         <div class="modal-panel">
           <p class="eyebrow">Reserved stock</p>
           <h2>Confirm payment</h2>
-          <p class="lead">One unit of <strong>${item.name}</strong> is reserved for this session. Confirm to create the order or cancel to release the stock immediately.</p>
+          <p class="lead">One unit of <strong>${item.name}</strong> was reserved by the backend and is being recorded in your order history.</p>
           <div class="panel" style="box-shadow:none; margin-bottom:16px">
             <div class="item-row">
               <div>
                 <strong>${event.name}</strong>
-                <div class="stock">${item.name} Â· Reservation ${state.pendingReservation.token}</div>
+                <div class="stock">${item.name} - Backend reservation recorded</div>
               </div>
-              <span class="price">${currency(item.price)}</span>
+              <span class="price">${currency(item.unit_price)}</span>
             </div>
           </div>
           <div class="actions">
             <button class="btn" type="button" onclick="confirmReservation()">${icons.check}Confirm order</button>
-            <button class="btn secondary" type="button" onclick="cancelReservation()">Cancel and release</button>
+            <button class="btn secondary" type="button" onclick="cancelReservation()">Close</button>
           </div>
         </div>
       `;
@@ -633,6 +630,8 @@
     }
 
     function connectToStockUpdates(eventId) {
+      if (state.sockets.has(eventId)) return;
+      state.sockets.add(eventId);
       const socket = new WebSocket(`ws://localhost:8000/ws/events/${eventId}`);
       socket.onmessage = (msg) => {
         const data = JSON.parse(msg.data);
@@ -647,6 +646,7 @@
           }
         }
       };
+      socket.onclose = () => state.sockets.delete(eventId);
     }
 
     function confirmReservation() {
@@ -662,22 +662,16 @@
     }
 
     function cancelReservation() {
-      const reservation = state.pendingReservation;
-      if (!reservation) return;
-      const event = state.events.find(candidate => candidate.id === reservation.eventId);
-      const item = event.items.find(candidate => candidate.id === reservation.itemId);
-      item.reserved -= 1;
-      item.stock += 1;
       state.pendingReservation = null;
       closeModal();
-      showToast('Reservation released', 'The reserved unit returned to live stock.');
+      showToast('Reservation recorded', 'The current backend records purchases immediately after reservation.');
       render();
     }
 
     function updateProfile(event) {
       event.preventDefault();
-      state.user.name = document.querySelector('#displayName').value.trim();
-      showToast('Profile updated', 'Your display name has been saved for this session.');
+      state.user.display_name = document.querySelector('#displayName').value.trim();
+      showToast('Profile updated locally', 'A profile update endpoint can persist this next.');
       render();
     }
 
@@ -687,27 +681,34 @@
       showToast('Password updated', 'The backend would verify the current password and store a new hash.');
     }
 
-    function createEvent(event) {
+    async function createEvent(event) {
       event.preventDefault();
       const stock = Number(document.querySelector('#itemStock').value);
       if (stock < 100 || stock > 500) return showToast('Invalid stock', 'Item stock must be between 100 and 500 units.');
       const itemName = document.querySelector('#itemName').value.trim();
-      state.events.unshift({
-        id: `evt-${Date.now()}`,
-        name: document.querySelector('#eventName').value.trim(),
-        cover: document.querySelector('#eventCover').value.trim(),
-        goLive: new Date(document.querySelector('#eventTime').value).getTime(),
-        forced: null,
-        items: [{
-          id: `itm-${Date.now()}`,
-          name: itemName,
-          price: Number(document.querySelector('#itemPrice').value),
-          initialStock: stock,
-          stock,
-          reserved: 0
-        }]
+      const response = await fetch(`${API_BASE_URL}/events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          name: document.querySelector('#eventName').value.trim(),
+          cover_photo: document.querySelector('#eventCover').value.trim(),
+          go_live_time: new Date(document.querySelector('#eventTime').value).toISOString(),
+          items: [{
+            name: itemName,
+            unit_price: Number(document.querySelector('#itemPrice').value),
+            initial_stock: stock
+          }]
+        })
       });
+      if (!response.ok) {
+        const data = await response.json();
+        return showToast('Event creation failed', data.detail || 'The backend rejected this event.');
+      }
       event.target.reset();
+      await fetchEvents();
       showToast('Event created', 'The new event is locked until its scheduled go-live time.');
       render();
     }
@@ -723,10 +724,10 @@
           <form class="form" onsubmit="saveEventEdit(event, '${event.id}', '${item.id}')">
             <div class="field"><label for="editEventName">Event name</label><input id="editEventName" value="${event.name}" required></div>
             <div class="field"><label for="editEventTime">Go-live date and time</label><input id="editEventTime" type="datetime-local" value="${new Date(event.goLive).toISOString().slice(0,16)}" required></div>
-            <div class="field"><label for="editItemName">Primary item name</label><input id="editItemName" value="${item.name}" required></div>
+            <div class="field"><label for="editItemName">Primary item name</label><input id="editItemName" value="${item.name}" disabled></div>
             <div class="grid two">
-              <div class="field"><label for="editItemPrice">Price</label><input id="editItemPrice" type="number" value="${item.price}" min="1" required></div>
-              <div class="field"><label for="editItemStock">Stock</label><input id="editItemStock" type="number" min="100" max="500" value="${item.initialStock}" required></div>
+              <div class="field"><label for="editItemPrice">Price</label><input id="editItemPrice" type="number" value="${item.unit_price}" min="1" disabled></div>
+              <div class="field"><label for="editItemStock">Stock</label><input id="editItemStock" type="number" min="100" max="500" value="${item.initial_stock}" disabled></div>
             </div>
             <div class="actions">
               <button class="btn" type="submit">${icons.check}Save changes</button>
@@ -737,49 +738,59 @@
       `;
     }
 
-    function saveEventEdit(submitEvent, eventId, itemId) {
+    async function saveEventEdit(submitEvent, eventId, itemId) {
       submitEvent.preventDefault();
-      const event = state.events.find(candidate => candidate.id === eventId);
-      const item = event.items.find(candidate => candidate.id === itemId);
-      const stock = Number(document.querySelector('#editItemStock').value);
-      if (stock < 100 || stock > 500) return showToast('Invalid stock', 'Item stock must stay between 100 and 500 units.');
-      event.name = document.querySelector('#editEventName').value.trim();
-      event.goLive = new Date(document.querySelector('#editEventTime').value).getTime();
-      item.name = document.querySelector('#editItemName').value.trim();
-      item.price = Number(document.querySelector('#editItemPrice').value);
-      item.initialStock = stock;
-      item.stock = stock;
+      const response = await fetch(`${API_BASE_URL}/events/${eventId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          name: document.querySelector('#editEventName').value.trim(),
+          go_live_time: new Date(document.querySelector('#editEventTime').value).toISOString()
+        })
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        return showToast('Update failed', data.detail || 'The backend rejected this update.');
+      }
       closeModal();
+      await fetchEvents();
       showToast('Locked event updated', 'Changes are saved because the event has not gone live yet.');
       render();
     }
 
-    function forceOpen(eventId) {
-      const event = state.events.find(candidate => candidate.id === eventId);
-      event.forced = 'live';
-      showToast('Event opened', `${event.name} is now accepting purchases.`);
-      render();
+    async function forceOpen(eventId) {
+      await updateEventState(eventId, 'live');
     }
 
-    function forceClose(eventId) {
-      const event = state.events.find(candidate => candidate.id === eventId);
-      event.forced = 'closed';
-      showToast('Event closed', `${event.name} no longer accepts purchases.`);
-      render();
+    async function forceClose(eventId) {
+      await updateEventState(eventId, 'closed');
     }
 
-    function toggleCustomer(userId) {
-      const user = users.find(candidate => candidate.id === userId);
-      user.active = !user.active;
-      showToast(user.active ? 'Customer reactivated' : 'Customer deactivated', `${user.name} account status was updated.`);
+    async function updateEventState(eventId, nextState) {
+      const response = await fetch(`${API_BASE_URL}/events/${eventId}/state`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ state: nextState })
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        return showToast('State update failed', data.detail || 'The backend rejected this change.');
+      }
+      await fetchEvents();
+      showToast(nextState === 'live' ? 'Event opened' : 'Event closed', 'The backend event state was updated.');
       render();
     }
 
     document.querySelectorAll('[data-role]').forEach(button => {
       button.addEventListener('click', () => {
         state.role = button.dataset.role;
-        state.user = state.role === 'admin' ? users.find(user => user.role === 'admin') : users[0];
-        state.view = state.role === 'admin' ? 'adminDashboard' : 'marketplace';
+        state.view = 'auth';
         render();
       });
     });
