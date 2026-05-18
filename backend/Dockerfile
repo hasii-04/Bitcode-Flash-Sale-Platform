@@ -9,7 +9,11 @@ COPY requirements.txt .
 RUN python -m pip install --upgrade pip && \
     pip install --no-cache-dir --timeout 120 --retries 5 -r requirements.txt
 
+# Copy application source
 COPY app ./app
+
+# Copy ML artefacts (training script + pre-trained model if present)
+COPY ml ./ml
 
 EXPOSE 8000
 
