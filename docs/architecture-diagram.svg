@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <defs>
+    <style>
+      .bg { fill: #f7f9fc; }
+      .box { fill: #ffffff; stroke: #25324d; stroke-width: 2; rx: 8; }
+      .accent { fill: #e8f1ff; stroke: #1d4ed8; }
+      .data { fill: #eefbf3; stroke: #15803d; }
+      .queue { fill: #fff7ed; stroke: #c2410c; }
+      .text { font: 18px Arial, sans-serif; fill: #111827; }
+      .small { font: 14px Arial, sans-serif; fill: #374151; }
+      .title { font: 28px Arial, sans-serif; font-weight: 700; fill: #111827; }
+      .arrow { stroke: #25324d; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#25324d"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1200" height="760"/>
+  <text class="title" x="60" y="55">SwiftDrop High-Concurrency Architecture</text>
+
+  <rect class="box" x="60" y="110" width="220" height="95"/>
+  <text class="text" x="95" y="150">Static Frontend</text>
+  <text class="small" x="86" y="178">HTML, CSS, Fetch, WebSocket</text>
+
+  <rect class="box accent" x="360" y="110" width="220" height="95"/>
+  <text class="text" x="410" y="150">FastAPI App</text>
+  <text class="small" x="395" y="178">Auth, Events, Profile, Purchase</text>
+
+  <rect class="box queue" x="660" y="110" width="220" height="95"/>
+  <text class="text" x="724" y="150">Redis</text>
+  <text class="small" x="694" y="178">Lua atomic stock reservation</text>
+
+  <rect class="box data" x="960" y="110" width="180" height="95"/>
+  <text class="text" x="1005" y="150">PostgreSQL</text>
+  <text class="small" x="990" y="178">Users, events, orders</text>
+
+  <path class="arrow" d="M280 158 H360"/>
+  <path class="arrow" d="M580 158 H660"/>
+  <path class="arrow" d="M880 158 H960"/>
+  <path class="arrow" d="M960 190 H880"/>
+  <path class="arrow" d="M660 190 H580"/>
+  <path class="arrow" d="M360 190 H280"/>
+
+  <rect class="box" x="140" y="290" width="920" height="360"/>
+  <text class="text" x="180" y="335">Purchase Request Path</text>
+  <text class="small" x="180" y="375">1. Customer sends authenticated Buy Now request.</text>
+  <text class="small" x="180" y="410">2. FastAPI verifies JWT, role, live event, duplicate purchases, and item/event match.</text>
+  <text class="small" x="180" y="445">3. Redis Lua script atomically checks remaining stock, decrements one unit, and marks buyer.</text>
+  <text class="small" x="180" y="480">4. PostgreSQL stores a Reserved order tied to the exact item and user.</text>
+  <text class="small" x="180" y="515">5. WebSocket broadcasts stock updates to connected marketplace clients.</text>
+  <text class="small" x="180" y="550">6. Customer confirms payment to mark order Confirmed, or cancels to release stock immediately.</text>
+  <text class="small" x="180" y="585">7. Redis protects the hot path from overselling under simultaneous requests.</text>
+  <text class="small" x="180" y="620">8. PostgreSQL remains source of truth for users, events, orders, and admin controls.</text>
+</svg>
