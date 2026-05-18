@@ -95,3 +95,16 @@ Open PostgreSQL shell:
 ```powershell
 docker compose exec db psql -U postgres -d swiftdrop
 ```
+
+## Machine Learning Bot Detection
+
+To protect the high-concurrency flash sales from automated bots, a machine learning model is integrated directly into the FastAPI backend.
+
+- **Trainer Agent (`backend/ml/train.py`)**: Trains a Scikit-Learn Random Forest Classifier on historical behavioral data (`backend/ml/bot_training_data.csv`).
+- **Middleware Integration (`backend/app/main.py`)**: A custom `BotDetectionMiddleware` loads the trained model at startup. It evaluates incoming `POST /api/v1/purchases/*` requests by extracting 4 behavioral features from custom headers:
+  - `X-Req-Per-Sec`
+  - `X-Click-Latency-Ms`
+  - `X-Is-Mobile`
+  - `X-Header-Consistency`
+- **Enforcement**: If the model predicts a `≥50%` probability that a request is a bot, it intercepts and rejects it immediately with a `403 Forbidden` response, safeguarding real customer stock.
+- **Verification (`tests/verify_ml.py`)**: A standalone test suite that validates the model's accuracy by sending known human and bot profiles against the live API.
