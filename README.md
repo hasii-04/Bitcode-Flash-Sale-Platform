@@ -43,8 +43,6 @@ Seed data is created during backend startup.
 
 - Customer: `maya@swiftdropdemo.com` / `password123`
 - Admin: `admin@swiftdropdemo.com` / `password123`
-- Admin: `kalana@gamil.com` / `password123`
-- Admin: `kalana@gmail.com` / `password123`
 
 Admin accounts are seeded in the database or created by an existing admin through the protected admin endpoint. Public registration always creates customer accounts only.
 
